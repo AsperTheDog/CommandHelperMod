@@ -1,9 +1,3 @@
-# Fabric Example Mod
+# Command Helper Mod
 
-## Setup
-
-For setup instructions please see the [fabric wiki page](https://fabricmc.net/wiki/tutorial:setup) that relates to the IDE that you are using.
-
-## License
-
-This template is available under the CC0 license. Feel free to learn from it and incorporate it in your own projects.
+This mod strives to expand the set of tools available for Minecraft in the process of command creation and formatting. The objective is to give an IDE-like set of functionalities to the game.
