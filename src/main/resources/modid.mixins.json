@@ -6,6 +6,8 @@
   "mixins": [
   ],
   "client": [
+    "ChatInputSuggestorMixin",
+    "CommandBlockScreenAccessor",
     "CommandBlockScreenMixin"
   ],
   "injectors": {
