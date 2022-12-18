@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 import java.util.List;
 
 @Mixin(ChatInputSuggestor.class)
-public interface ChatInputSuggestorMixin {
+public interface ChatInputSuggestorAccessor {
 
     @Accessor("messages")
     List<OrderedText> getMessages();

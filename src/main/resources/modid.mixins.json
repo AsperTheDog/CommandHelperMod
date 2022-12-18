@@ -6,9 +6,11 @@
   "mixins": [
   ],
   "client": [
-    "ChatInputSuggestorMixin",
+    "AbstractCommandBlockScreenAccessor",
+    "AbstractCommandBlockScreenMixin",
+    "ChatInputSuggestorAccessor",
     "CommandBlockScreenAccessor",
-    "CommandBlockScreenMixin"
+    "TextFieldWidgetAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
