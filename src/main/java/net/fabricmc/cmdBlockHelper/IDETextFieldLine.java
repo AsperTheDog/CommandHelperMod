@@ -9,7 +9,7 @@ import net.minecraft.util.math.MathHelper;
 
 
 public class IDETextFieldLine extends TextFieldWidget {
-    public static int tabLength = 2;
+    public static final int tabLength = 2;
 
     private final TextFieldWidget lineCounter;
     private String prefix;
@@ -65,10 +65,6 @@ public class IDETextFieldLine extends TextFieldWidget {
     //************************* GETTERS *************************
     //***********************************************************
 
-    public int getCursor(){
-        return super.getCursor();
-    }
-
     public int getFirstCharacterIndex(){
         // Small wrapper for the mixing Accessor function
         return ((TextFieldWidgetAccessor)this).firstCharacterIndexAccessor();
@@ -84,7 +80,7 @@ public class IDETextFieldLine extends TextFieldWidget {
     }
 
     public void setFirstCharacterIndex(int firstCharacterIndex){
-        // If FirstCharacterIndex is set to a value outside of the range provided, minecraft will crash
+        // If FirstCharacterIndex is set to a value outside the range provided, minecraft will crash
         // since it will try to create a substring with an out of bounds index
         ((TextFieldWidgetAccessor)this).firstCharacterIndexSetter(
                 MathHelper.clamp(firstCharacterIndex, 0, this.getText().length())

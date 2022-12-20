@@ -15,9 +15,9 @@ import java.util.Stack;
 import java.util.function.Consumer;
 
 class EditorSnapshot {
-    public int cursor;
-    public int line;
-    public String text;
+    public final int cursor;
+    public final int line;
+    public final String text;
 
     EditorSnapshot(int cursor, int line, String text){
         this.cursor = cursor;
@@ -344,7 +344,7 @@ public class IDETextEditor implements Element, Selectable {
                 .replaceAll("\\{", "\n{\n")
                 .replaceAll("\\[", "\n[\n")
                 .replaceAll(",", ",\n")
-                .replaceAll("[\n]{2,}", "\n")
+                .replaceAll("\n{2,}", "\n")
                 .replaceAll("'\n\\[", "\n'[")
                 .replaceAll("'\n\\{", "\n'{")
                 .replaceAll("\"\n\\[", "\n\"[")
@@ -353,7 +353,7 @@ public class IDETextEditor implements Element, Selectable {
                 .replaceAll("}\n'", "}'")
                 .replaceAll("]\n,", "],")
                 .replaceAll("}\n,", "},")
-                .replaceAll("[\n]{2,}", "\n")
+                .replaceAll("\n{2,}", "\n")
                 .replaceAll("\\{\n}", "{\n\n}")
                 .replaceAll("\\[\n]", "[\n\n]")
                 .replaceAll("=", " = ")
