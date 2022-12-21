@@ -14,26 +14,19 @@ import java.util.Objects;
 import java.util.Stack;
 import java.util.function.Consumer;
 
-class EditorSnapshot {
-    public final int cursor;
-    public final int line;
-    public final String text;
-
-    EditorSnapshot(int cursor, int line, String text){
-        this.cursor = cursor;
-        this.line = line;
-        this.text = text;
-    }
+record EditorSnapshot(int cursor, int line, String text) {
 }
 
 public class IDETextEditor implements Element, Selectable {
-    final static int lineHeight = 12;
+    final static int lineHeight = 13;
     final static int maxUndos = 100;
     final static int scrollMult = 2;
 
     private enum Directions{
         UP,
-        DOWN
+        DOWN,
+        RIGHT,
+        LEFT
     }
     private final TextFieldWidget background;
     private final List<IDETextFieldLine> lines;
@@ -68,7 +61,7 @@ public class IDETextEditor implements Element, Selectable {
         this.background.setText("");
         this.changedListener = changedListener;
         this.focusedLine = -1;
-        this.maxLines = Math.floorDiv(height, lineHeight);
+        this.maxLines = Math.floorDiv(height - 10, lineHeight);
         this.lineShift = 0;
         this.cursorShift = 0;
         this.undos = new Stack<>();
@@ -121,9 +114,7 @@ public class IDETextEditor implements Element, Selectable {
         // In case the user clicks below the last line, the last line will be focused
         IDETextFieldLine lastLine = this.lines.get(Math.min(this.lines.size(),this.maxLines + this.lineShift) - 1);
         if (mouseY > lastLine.getY() + lastLine.getHeight()){
-            this.setFocusedLine(this.lines.size() - 1);
-            IDETextFieldLine line = this.lines.get(focusedLine);
-            line.setCursor(line.getText().length());
+            this.jumpTo(this.lines.size() - 1, -1);
         }
         //Always update the lines in case of
         this.updateLines();
@@ -200,6 +191,12 @@ public class IDETextEditor implements Element, Selectable {
             this.processVerticalArrows(Directions.DOWN);
             return true;
         }
+        if (keyCode == 263){
+            if (this.processHorizontalArrows(Directions.LEFT)) return true;
+        }
+        if (keyCode == 262){
+            if (this.processHorizontalArrows(Directions.RIGHT)) return true;
+        }
         //TODO: This check could probably be done  at the beginning, that way the functions don't have to do it
         if (focusedLine < 0 || focusedLine > this.lines.size() - 1) return false;
         boolean ret = lines.get(focusedLine).keyPressed(keyCode, scanCode, modifiers);
@@ -235,10 +232,10 @@ public class IDETextEditor implements Element, Selectable {
             int cursor = line.getCursor();
             if (text.charAt(cursor - 1) == '[') {
                 line.setText(text.substring(0, cursor) + ']' + text.substring(cursor), cursorShift);
-                line.setCursor(cursor);
+                this.jumpTo(cursor);
             } else if (text.charAt(cursor - 1) == '{') {
                 line.setText(text.substring(0, cursor) + '}' + text.substring(cursor), cursorShift);
-                line.setCursor(cursor);
+                this.jumpTo(cursor);
             }
         }
         this.updateLines();
@@ -411,7 +408,7 @@ public class IDETextEditor implements Element, Selectable {
 
     private void addLine(String text, boolean batched, int pos){
         if (pos == -1) pos = this.lines.size();
-        IDETextFieldLine newLine = new IDETextFieldLine(textRenderer, x + 10, y + 5 + pos * lineHeight, this.width - 20, lineHeight, text);
+        IDETextFieldLine newLine = new IDETextFieldLine(textRenderer, x + 3, y + 5 + pos * lineHeight, this.width - 20, lineHeight, text);
         newLine.setChangedListener(this.changedListener);
         newLine.setMaxLength(32500);
         newLine.setEditable(true);
@@ -505,6 +502,8 @@ public class IDETextEditor implements Element, Selectable {
         for (IDETextFieldLine line : lines){
             // Position in the visible box
             int pos = i - this.lineShift;
+            // We update the new position in the box
+            line.setY(y + 5 + pos * lineHeight);
             // For the line counter at the left
             line.setLineNum(i + 1);
             // So the line knows how bigh the line counter has to be
@@ -513,12 +512,10 @@ public class IDETextEditor implements Element, Selectable {
             line.setFirstCharacterIndex(cursorShift);
             // We update the line counter prefix
             line.updatePrefix();
-            // We update the new position in the box
-            line.setY(y + 5 + pos * lineHeight);
             i++;
         }
         // If there was a cursor, restore it
-        if (cursor != -1) this.lines.get(focusedLine).setCursor(cursor);
+        if (cursor != -1) this.jumpTo(cursor);
     }
 
     private void calculateCursorShift(){
@@ -530,6 +527,20 @@ public class IDETextEditor implements Element, Selectable {
         // The first visible line can at most be the last line and, obviously, at least the first line
         this.lineShift = Math.max(0, Math.min(this.lines.size() - 1, lineShift));
         this.updateLines();
+    }
+
+    private void jumpTo(int cursor){
+        this.jumpTo(focusedLine, cursor);
+    }
+
+    private void jumpTo(int line, int cursor){
+        if (focusedLine != line)
+            this.setFocusedLine(line);
+        if (focusedLine == -1) return;
+        // We can make the cursor wrap around so -1 means the end of the string, -2 is one more to the left, and so on
+        if (cursor < 0)
+            cursor = lines.get(focusedLine).getText().length() - (-cursor - 1);
+        this.lines.get(focusedLine).setCursor(cursor);
     }
 
     //**********************************************************
@@ -586,14 +597,12 @@ public class IDETextEditor implements Element, Selectable {
         // Every undo transforms into a redo
         this.saveRedoSnapshot();
         // We paste the snapshot code and update focused line
-        this.updateCommand(snap.text, false);
-        this.setFocusedLine(snap.line);
+        this.updateCommand(snap.text(), false);
+        this.jumpTo(snap.line(), snap.cursor());
         this.wasThereUndoUpdate = true;
         // After a pop, any valid key should trigger an undo
         this.lastKey = -1;
         this.updateLines();
-        if (focusedLine >= 0 && focusedLine <= this.lines.size() - 1)
-            this.lines.get(focusedLine).setCursor(snap.cursor);
     }
 
     private void popRedo(){
@@ -603,13 +612,11 @@ public class IDETextEditor implements Element, Selectable {
         EditorSnapshot snap = this.redos.pop();
         this.redoNum--;
         // We paste the snapshot code and update focused line
-        this.updateCommand(snap.text, false);
-        this.setFocusedLine(snap.line);
+        this.updateCommand(snap.text(), false);
+        this.jumpTo(snap.line(), snap.cursor());
         // After a pop, any valid key should trigger an undo
         this.lastKey = -1;
         this.updateLines();
-        if (focusedLine >= 0 && focusedLine <= this.lines.size() - 1)
-            this.lines.get(focusedLine).setCursor(snap.cursor);
     }
 
     private void clearRedo(){
@@ -630,9 +637,9 @@ public class IDETextEditor implements Element, Selectable {
         // We set the line text to be the part we didn't get
         line.setText(line.getText().substring(0, cursor), cursorShift);
         // Create new line below the original one with the text we extracted earlier
-        this.addLine(text, false, focusedLine + 1);
-        this.setFocusedLine(focusedLine + 1);
-        this.lines.get(focusedLine).setCursor(0);
+        // We strip leading spaces because we are going to manually set the tabs later
+        this.addLine(text.stripLeading(), false, focusedLine + 1);
+        this.jumpTo(focusedLine + 1, 0);
         // We get how many tabs we have to put in the new line
         int stack = getStackValueAtLine(focusedLine);
         for (int i = 0; i < stack; i++){
@@ -642,33 +649,43 @@ public class IDETextEditor implements Element, Selectable {
     }
 
     private void insertScopedIntros(){
-        // TODO: add extra lines if it's an empty scope
-        // Placeholder
+        int cursor = this.lines.get(focusedLine).getCursor();
+        String text = this.lines.get(focusedLine).getText();
+        // Put the opening symbol in a newLine only if there is additional text in the line currently
+        if (!text.substring(0, cursor - 1).trim().equals("")) {
+            // Move one back to get before the opening symbol, then intro, then get back to the middle
+            this.jumpTo(this.lines.get(focusedLine).getCursor() - 1);
+            this.insertIntro();
+            this.jumpTo(this.lines.get(focusedLine).getCursor() + 1);
+        }
+        // Two intros to leave an empty line inside, then add one tab to the middle line to get proper indents
         this.insertIntro();
+        this.insertIntro();
+        this.jumpTo(focusedLine - 1, -1);
+        this.addTab();
+        this.updateLines();
     }
 
-    public void processIntro() {
+    private void processIntro() {
         if (focusedLine < 0 || focusedLine > this.lines.size() - 1) return;
         IDETextFieldLine line = this.lines.get(focusedLine);
         int cursor = line.getCursor();
-        boolean processScope = false;
         // If at the moment of pressing intro, there are opening and closing scope symbols
         // to the left and right of the cursor respectively, that means the player is adding a newline
         // to an empty scope. In that case we want to put the scope symbols in their own lines with
         // an empty one in the middle
-        if (cursor != 0 && cursor < line.getText().length() - 1){
+        if (cursor > 0 && cursor < line.getText().length()){
             char prev = line.getText().charAt(cursor - 1);
-            char next = line.getText().charAt(cursor + 1);
+            char next = line.getText().charAt(cursor);
             if ((prev == '[' && next == ']') || (prev == '{' && next == '}')){
-                processScope = true;
+                this.insertScopedIntros();
+                return;
             }
         }
-        if (processScope) this.insertScopedIntros();
-        else this.insertIntro();
-        this.updateLines();
+        this.insertIntro();
     }
 
-    public boolean ProcessBackslash(boolean del){
+    private boolean ProcessBackslash(boolean del){
         if (focusedLine < 0 || focusedLine > this.lines.size() - 1) return true;
         IDETextFieldLine line = this.lines.get(focusedLine);
         int cursor = line.getCursor();
@@ -676,9 +693,8 @@ public class IDETextEditor implements Element, Selectable {
         // advance to the beginning of the next line
         if (del){
             if (cursor == line.getText().length() && focusedLine < this.lines.size() - 1){
-                this.setFocusedLine(focusedLine + 1);
-                line = lines.get(focusedLine);
-                line.setCursor(0);
+                this.jumpTo(focusedLine + 1, 0);
+                line = this.lines.get(focusedLine);
                 cursor = 0;
             }
             else{
@@ -700,14 +716,12 @@ public class IDETextEditor implements Element, Selectable {
         prevLine.setText(prevLine.getText() + line.getText(), cursorShift);
         // Delete the current line and change focus to the previous one
         this.removeLine(focusedLine);
-        this.setFocusedLine(focusedLine - 1);
-        // Restore cursor
-        prevLine.setCursor(cursor);
+        this.jumpTo(focusedLine - 1, cursor);
         this.updateLines();
         return true;
     }
 
-    public void processVerticalArrows(Directions dir){
+    private void processVerticalArrows(Directions dir){
         if (focusedLine < 0 || focusedLine > this.lines.size() - 1) return;
         int offset = 0;
         // Make proper checks for each direction and set the offset accordingly
@@ -721,9 +735,20 @@ public class IDETextEditor implements Element, Selectable {
         }
         // Get cursor position and change focus
         int cursor = this.lines.get(focusedLine).getCursor();
-        this.setFocusedLine(focusedLine + offset);
-        // Restore cursor
-        this.lines.get(focusedLine).setCursor(cursor);
+        this.jumpTo(focusedLine + offset, cursor);
         this.updateLines();
+    }
+
+    private boolean processHorizontalArrows(Directions dir){
+        if (focusedLine < 0 || focusedLine > this.lines.size() - 1) return true;
+        int cursor = this.lines.get(focusedLine).getCursor();
+        // If we are not managing a change of line, we leave the handling to TextFieldWidget
+        if (dir == Directions.LEFT && cursor != 0 ||
+            dir == Directions.RIGHT && cursor != this.lines.get(focusedLine).getText().length())
+                return false;
+        if (dir == Directions.LEFT) this.jumpTo(focusedLine - 1, -1);
+        else if (dir == Directions.RIGHT) this.jumpTo(focusedLine + 1, 0);
+        this.updateLines();
+        return true;
     }
 }

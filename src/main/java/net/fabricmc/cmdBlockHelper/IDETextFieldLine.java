@@ -22,7 +22,7 @@ public class IDETextFieldLine extends TextFieldWidget {
         super(textRenderer, x, y, width, height, Text.literal(text));
         lineCounter = new TextFieldWidget(textRenderer, x, y, 20, height, Text.literal(text + "_lineCount"));
         lineNum = 1;
-        prefix = lineNum + " |";
+        prefix = lineNum + " -";
         lineCounter.setEditable(false);
         lineCounter.setDrawsBackground(false);
         maxLines = 1;
@@ -53,10 +53,10 @@ public class IDETextFieldLine extends TextFieldWidget {
         prefix = lineNum + " ".repeat(Math.max(0, Integer.toString(maxLines).length() - Integer.toString(lineNum).length())) + " -";
         lineCounter.setText(prefix);
         // Update the width of the prefix, then shrink and move the main line so everything fits together
-        int prefixWidth = 8 * prefix.length();
+        int prefixWidth = 7 * (prefix.length() + 1);
         lineCounter.setWidth(prefixWidth);
-        super.setWidth(this.initW - prefixWidth);
-        super.setX(this.initX + prefixWidth);
+        super.setWidth(this.initW - prefixWidth - 3);
+        super.setX(this.initX + prefixWidth + 3);
         // the text will truncate sometimes if we don't reset the cursor
         lineCounter.setCursorToStart();
     }
