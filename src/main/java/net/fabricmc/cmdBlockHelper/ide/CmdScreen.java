@@ -1,4 +1,4 @@
-package net.fabricmc.cmdBlockHelper;
+package net.fabricmc.cmdBlockHelper.ide;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -17,7 +17,7 @@ import net.minecraft.text.Text;
 import java.util.Objects;
 
 @Environment(EnvType.CLIENT)
-public class CmdIDEScreen extends Screen {
+public class CmdScreen extends Screen {
     public static TextRenderer monoRenderer = null;
 
     protected final AbstractCommandBlockScreen parent;
@@ -26,9 +26,9 @@ public class CmdIDEScreen extends Screen {
 
     protected ButtonWidget doneButton;
     protected ButtonWidget cancelButton;
-    protected IDETextEditor editor;
+    protected TextEditor editor;
 
-    public CmdIDEScreen(AbstractCommandBlockScreen parent) {
+    public CmdScreen(AbstractCommandBlockScreen parent) {
         super(Text.literal("IDE"));
         this.parent = parent;
         this.text = "";
@@ -45,7 +45,7 @@ public class CmdIDEScreen extends Screen {
         ).dimensions(this.width - 80, this.height - 30, 70, 20).build());
 
         // Editor box creation
-        this.editor = new IDETextEditor(monoRenderer, 10, 10, this.width - 100, this.height - 20, this::onCommandChanged);
+        this.editor = new TextEditor(monoRenderer, 10, 10, this.width - 100, this.height - 20);
         // Extract the current command in the command block GUI
         this.text = ((AbstractCommandBlockScreenAccessor)this.parent).getConsoleCommandTextField().getText();
         // TODO: Properly store the unformatted command as an NBT tag or something similar. Classes are recreated every time
@@ -112,10 +112,6 @@ public class CmdIDEScreen extends Screen {
             this.commitAndClose();
             return true;
         }
-    }
-
-    private void onCommandChanged(String text) {
-        //TODO: useless function?
     }
 
     public void render(MatrixStack matrices, int mouseX, int mouseY, float delta) {

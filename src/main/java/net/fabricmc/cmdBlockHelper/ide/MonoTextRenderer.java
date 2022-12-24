@@ -1,4 +1,4 @@
-package net.fabricmc.cmdBlockHelper;
+package net.fabricmc.cmdBlockHelper.ide;
 
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -23,6 +23,8 @@ public class MonoTextRenderer {
         MinecraftClient mc = MinecraftClient.getInstance();
         List<Font> list = new ArrayList<>();
         // TODO: This probably should not be hardcoded...
+        //TODO: The font has to be edited so that stuff is at the center, a lot of objects are shifted to the right
+        // we should use this, exported fonts work perfectly: https://www.glyphrstudio.com/online/
         String json = """
                 {
                   "providers": [

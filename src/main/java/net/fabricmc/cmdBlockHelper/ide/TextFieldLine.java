@@ -1,4 +1,4 @@
-package net.fabricmc.cmdBlockHelper;
+package net.fabricmc.cmdBlockHelper.ide;
 
 import net.fabricmc.cmdBlockHelper.mixin.TextFieldWidgetAccessor;
 import net.minecraft.client.font.TextRenderer;
@@ -8,7 +8,7 @@ import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 
 
-public class IDETextFieldLine extends TextFieldWidget {
+public class TextFieldLine extends TextFieldWidget {
     public static final int tabLength = 2;
 
     private final TextFieldWidget lineCounter;
@@ -18,7 +18,7 @@ public class IDETextFieldLine extends TextFieldWidget {
     private final int initX;
     private final int initW;
 
-    public IDETextFieldLine(TextRenderer textRenderer, int x, int y, int width, int height, String text) {
+    public TextFieldLine(TextRenderer textRenderer, int x, int y, int width, int height, String text) {
         super(textRenderer, x, y, width, height, Text.literal(text));
         lineCounter = new TextFieldWidget(textRenderer, x, y, 20, height, Text.literal(text + "_lineCount"));
         lineNum = 1;
@@ -91,7 +91,10 @@ public class IDETextFieldLine extends TextFieldWidget {
         // Sets the focus on or off depending on the boolean value
         // For some reason minecraft only provides a toggle function, which is... bad
         if (!focus && this.isFocused()) this.changeFocus(true);
-        else if (focus && !this.isFocused()) this.changeFocus(false);
+        else if (focus && !this.isFocused()) {
+            this.changeFocus(false);
+            this.setCursor(this.getText().length());
+        }
     }
 
     public void setText(String text, int cursorShift){
