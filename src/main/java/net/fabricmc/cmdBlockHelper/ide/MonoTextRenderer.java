@@ -23,14 +23,12 @@ public class MonoTextRenderer {
         MinecraftClient mc = MinecraftClient.getInstance();
         List<Font> list = new ArrayList<>();
         // TODO: This probably should not be hardcoded...
-        //TODO: The font has to be edited so that stuff is at the center, a lot of objects are shifted to the right
-        // we should use this, exported fonts work perfectly: https://www.glyphrstudio.com/online/
         String json = """
                 {
                   "providers": [
                     {
                       "type": "ttf",
-                      "file": "minecraft:fixedsys.ttf",
+                      "file": "minecraft:fixedsys2.ttf",
                       "shift": [0, 1],
                       "size": 12.0,
                       "oversample": 16.0

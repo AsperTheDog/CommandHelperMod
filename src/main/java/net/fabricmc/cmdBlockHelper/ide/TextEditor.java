@@ -418,8 +418,9 @@ public class TextEditor implements Element, Selectable {
     }
 
     public void addTab() {
-        if (focusedLine < 0 || focusedLine > this.lines.size() - 1) return;
+        if (focusedLine < 0 || focusedLine >= this.lines.size()) return;
         this.lines.get(focusedLine).addTab();
+        this.updateLines(true);
     }
 
     private void removeLine(int pos){
@@ -442,16 +443,13 @@ public class TextEditor implements Element, Selectable {
             char prev = formatted.charAt(i - 1);
             char next = formatted.charAt(i + 1);
 
-            String numChars = "0123456789";
-            // If we are at the outermost part of the command (arguments are separated by spaces here)
-            // we want to make sure numbers are separated to scoped sections, otherwise minecraft will not like it
-            // THIS IS ONLY FOR NUMBERS. Minecraft formatting is very picky :(
-            if (numChars.indexOf(prev) != -1 && stack == 0 && (next == '{' || next == '[')) continue;
-            if (numChars.indexOf(next) != -1 && stack == 0 && (prev == '}' || prev == ']')) continue;
-
             String specialChars = "{}[]=,";
             // Remove spaces around scope symbols, commas or equal signs
             if (curr == ' ' && (specialChars.indexOf(prev) != -1 || specialChars.indexOf(next) != -1)){
+                // If we are at the outermost part of the command (arguments are separated by spaces here)
+                // we want to make sure brackets are stuck to the previous argument, otherwise minecraft will not like it
+                // THIS IS ONLY FOR NUMBERS. Minecraft formatting is very picky :(
+                if (stack == 0 && next != '[') continue;
                 formatted.deleteCharAt(i);
                 i--;
             }

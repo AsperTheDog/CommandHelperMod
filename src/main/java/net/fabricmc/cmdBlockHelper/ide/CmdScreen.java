@@ -101,6 +101,11 @@ public class CmdScreen extends Screen {
                this.editor.addTab();
                return true;
         }
+        // TODO: Confirmation message "are you sure you want to cancel?" or something
+        if (keyCode == 256){
+            this.cancel();
+            return true;
+        }
         if (super.keyPressed(keyCode, scanCode, modifiers)) {
             return true;
         // Intro will not trigger a close, since that just adds a newline in the editor.
@@ -108,7 +113,6 @@ public class CmdScreen extends Screen {
         } else if (keyCode != 335) {
             return false;
         } else {
-            // TODO: Should Esc really commit and close instead of cancel? Not sure, review
             this.commitAndClose();
             return true;
         }
