@@ -128,12 +128,11 @@ public class CommandBlockIntellisense {
         String symbolText = rawText.substring(start, end);
         // We expand the list of lines until we get the line we're in
         while (line >= this.symbols.size()) symbols.add(new ArrayList<>());
-        if (symbolText.strip().equals("")){
-            if (sentByIntro) {
-                if (!symbols.get(line).isEmpty()) return end;
-            }
-            else return start;
-        }
+        // We can delegate empty symbols to form part of the next, that way if you have "   " and "example" the
+        // resulting symbol will be "   example". This must not happen if the symbol is issued by a newline, since
+        // you can't have one symbol distributed in two different lines
+        if (symbolText.strip().equals("") && !sentByIntro)
+            return start;
         // Add the new symbol
         symbols.get(line).add(new CommandParserNode(symbols.get(line).size(), line, start - lineStart, isString, symbolText, this));
         return end;

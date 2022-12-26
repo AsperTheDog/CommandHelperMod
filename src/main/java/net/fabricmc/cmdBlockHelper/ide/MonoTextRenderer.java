@@ -28,7 +28,7 @@ public class MonoTextRenderer {
                   "providers": [
                     {
                       "type": "ttf",
-                      "file": "minecraft:fixedsys2.ttf",
+                      "file": "minecraft:fixedsys.ttf",
                       "shift": [0, 1],
                       "size": 12.0,
                       "oversample": 16.0
