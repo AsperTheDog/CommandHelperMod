@@ -7,6 +7,8 @@ import net.minecraft.text.OrderedText;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 enum ScopeType{
     BRACKET,
@@ -17,6 +19,9 @@ record StackElement(ScopeType type, CommandParserNode relatedNode) {
 }
 
 public class CommandBlockIntellisense {
+    public static Pattern coordPatt = Pattern.compile(
+            "(~-?[0-9.]+|\\^-?[0-9]+(\\.[0-9]+)?|~|\\^|-?[0-9]+(\\.[0-9]+)?) (~-?[0-9.]+|\\^-?[0-9]+(\\.[0-9]+)?|~|\\^|-?[0-9]+(\\.[0-9]+)?) (~-?[0-9.]+|\\^-?[0-9]+(\\.[0-9]+)?|~|\\^|-?[0-9]+(\\.[0-9]+)?)"
+    );
     private static CommandBlockIntellisense instance;
     String rawText;
     List<List<CommandParserNode>> symbols;
@@ -66,12 +71,30 @@ public class CommandBlockIntellisense {
         lineStart = start;
         // String of chars that will create single char symbols
         String breakingChars = ",:=.";
+
+        Matcher coordMatchFinder = coordPatt.matcher(rawText);
+        List<int[]> coordMatches = new ArrayList<>();
+
+        while (coordMatchFinder.find()){
+            coordMatches.add(new int[]{coordMatchFinder.start(), coordMatchFinder.end()});
+        }
+
         for (int i = 0; i < rawText.length(); i++){
+            for (int[] coords : coordMatches){
+                if (coords[0] == i){
+                    start = addSymbol(start, coords[1], currentLine);
+                    CommandParserNode last = this.getLastSymbol();
+                    if (last != null) last.setIsCoords(true);
+                    i = start;
+                }
+            }
             char chr = rawText.charAt(i);
             // Every newline will create a symbol so that symbols are enclosed to their lines only
             if (chr == '\n'){
                 // Strings can happen between multiple lines, we want the symbols to be aware of that
-                start = addSymbol(start, i, currentLine, inString, true) + 1;
+                start = addSymbol(start, i, currentLine, true) + 1;
+                CommandParserNode last = this.getLastSymbol();
+                if (last != null) last.setIsString(inString);
                 lineStart = start;
                 currentLine++;
             }
@@ -113,15 +136,22 @@ public class CommandBlockIntellisense {
         this.generateArgs();
     }
 
+    private CommandParserNode getLastSymbol() {
+        int lastLine = this.symbols.size() - 1;
+        if (lastLine < 0) return null;
+        int lastIndex = this.symbols.get(lastLine).size() - 1;
+        return this.getSymbol(lastIndex, lastLine);
+    }
+
     //***********************************************************
     //********************* SYMBOL HANDLING *********************
     //***********************************************************
 
     private int addSymbol(int start, int end, int line){
-        return this.addSymbol(start, end, line, false, false);
+        return this.addSymbol(start, end, line, false);
     }
 
-    private int addSymbol(int start, int end, int line, boolean isString, boolean sentByIntro){
+    private int addSymbol(int start, int end, int line, boolean sentByIntro){
         // We don't want to add empty symbols
         if (start == end) return end;
         // We prune the symbol content from the command
@@ -134,7 +164,7 @@ public class CommandBlockIntellisense {
         if (symbolText.strip().equals("") && !sentByIntro)
             return start;
         // Add the new symbol
-        symbols.get(line).add(new CommandParserNode(symbols.get(line).size(), line, start - lineStart, isString, symbolText, this));
+        symbols.get(line).add(new CommandParserNode(symbols.get(line).size(), line, start - lineStart, symbolText, this));
         return end;
     }
 

@@ -21,7 +21,8 @@ enum SymbolTypes {
     LIST,
     QUOTE,
     NUMBER,
-    DOT
+    DOT,
+    COORDS
 }
 
 public class CommandParserNode {
@@ -31,13 +32,13 @@ public class CommandParserNode {
     private boolean hasError;
     private final CommandBlockIntellisense parent;
     private CommandParserNode sibling;
-    private final boolean isString;
+    private boolean isString, isCoords;
 
     //************************************************************
     //*************************** CORE ***************************
     //************************************************************
 
-    public CommandParserNode(int symbolsIndex, int line, int positionInLine, boolean isString, String symbol, CommandBlockIntellisense parent) {
+    public CommandParserNode(int symbolsIndex, int line, int positionInLine, String symbol, CommandBlockIntellisense parent) {
         this.symbol = symbol;
         this.parent = parent;
         this.symbolsIndex = symbolsIndex;
@@ -45,7 +46,8 @@ public class CommandParserNode {
         this.symbolType = null;
         sibling = null;
         this.line = line;
-        this.isString = isString;
+        this.isString = false;
+        this.isCoords = false;
     }
 
     //************************************************************
@@ -57,7 +59,10 @@ public class CommandParserNode {
         // This pass will assign the appropriate argument types to the symbols so the system knows what color to apply
         // to them. This is the first pass, so only independent arguments will be applied (that is, arguments that are not
         // relative to other arguments
-        if (this.symbol.contains("\"") || this.isString) {
+        if (this.isCoords){
+            this.symbolType = SymbolTypes.COORDS;
+        }
+        else if (this.symbol.contains("\"") || this.isString) {
             this.symbolType = SymbolTypes.STRING;
         }
         else if (this.symbol.contains("=")) {
@@ -110,6 +115,24 @@ public class CommandParserNode {
                 return;
             }
         }
+
+        // We do the same for the elements to the right of an equal sign or a semicolon
+        CommandParserNode prev = this.parent.getSymbol(symbolsIndex - 1, line);
+        i = 2;
+        while(prev != null && prev.symbol.strip().equals("")) {
+            prev = this.parent.getSymbol(symbolsIndex - i, line);
+            i++;
+        }
+        if (prev != null) {
+            if (prev.getSymbolType() == SymbolTypes.EQUAL) {
+                this.symbolType = SymbolTypes.RIGHT_EQUAL;
+                return;
+            }
+            if (prev.getSymbolType() == SymbolTypes.SEMICOLON) {
+                this.symbolType = SymbolTypes.RIGHT_EQUAL;
+                return;
+            }
+        }
         // If no argument has been found at all, it's flagged as a normal symbol
         this.symbolType = SymbolTypes.NORMAL;
     }
@@ -140,16 +163,17 @@ public class CommandParserNode {
         // We apply the correct color depending on what argument type is attached to the symbol
         Style style = Style.EMPTY;
         switch (this.symbolType) {
-            case STRING, QUOTE ->  style = style.withColor(Formatting.GREEN);
-            case EQUAL, SEMICOLON ->  style = style.withColor(Formatting.YELLOW);
-            case LEFT_EQUAL, LEFT_SEMICOLON ->  style = style.withColor(Formatting.GOLD);
-            case RIGHT_EQUAL, RIGHT_SEMICOLON ->  style = style.withColor(Formatting.LIGHT_PURPLE);
+            case STRING, QUOTE -> style = style.withColor(Formatting.GREEN);
+            case EQUAL, SEMICOLON -> style = style.withColor(Formatting.YELLOW);
+            case LEFT_EQUAL, LEFT_SEMICOLON -> style = style.withColor(Formatting.GOLD);
+            case RIGHT_EQUAL, RIGHT_SEMICOLON -> style = style.withColor(Formatting.LIGHT_PURPLE);
             case COMMA ->  style = style.withColor(Formatting.GRAY);
             case SCOPE ->  style = style.withColor(Formatting.BLUE);
             case LIST ->  style = style.withColor(Formatting.AQUA);
             case NORMAL ->  style = style.withColor(Formatting.WHITE);
             case DOT -> style = style.withColor(Formatting.GOLD);
             case NUMBER -> style = style.withColor(Formatting.AQUA);
+            case COORDS -> style = style.withColor(Formatting.LIGHT_PURPLE);
         }
         // If the error flag is activated, override the color to red
         if (this.hasError) style = style.withColor(Formatting.RED);
@@ -174,5 +198,13 @@ public class CommandParserNode {
 
     public void setSibling(CommandParserNode sibling) {
         this.sibling = sibling;
+    }
+
+    public void setIsString(boolean isString){
+        this.isString = isString;
+    }
+
+    public void setIsCoords(boolean isCoords){
+        this.isCoords = isCoords;
     }
 }

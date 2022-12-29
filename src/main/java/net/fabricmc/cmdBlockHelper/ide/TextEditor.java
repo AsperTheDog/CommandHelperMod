@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Stack;
+import java.util.regex.Matcher;
 
 record EditorSnapshot(int cursor, int line, String text) {
 }
@@ -293,7 +294,8 @@ public class TextEditor implements Element, Selectable {
         // Divide the string into a list of lines
         List<String> cmdLines = new ArrayList<>(List.of(text.split("\n", -1)));
         // Remove a possible trailing empty line. We only want to remove the last one!
-        if (Objects.equals(cmdLines.get(cmdLines.size() - 1), "")){
+        // We do not want to do this if there is only one line
+        if (Objects.equals(cmdLines.get(cmdLines.size() - 1), "") && cmdLines.size() > 1){
             cmdLines.remove(cmdLines.size() - 1);
         }
         // Reset and inject the lines into the editor
@@ -354,27 +356,72 @@ public class TextEditor implements Element, Selectable {
                 .replaceAll("=", " = ")
                 .strip());
 
+        Matcher coordMatchFinder = CommandBlockIntellisense.coordPatt.matcher(str);
+        List<int[]> coordMatches = new ArrayList<>();
+
+        while (coordMatchFinder.find()){
+            coordMatches.add(new int[]{coordMatchFinder.start(), coordMatchFinder.end()});
+        }
+
         // Add tabs within scopes to create proper indentation
+        int lastNewLine = 0;
+        boolean overSkipped = false;
+        boolean inString = false;
         for (int i = 0; i < str.length(); i++){
             char currentChar = str.charAt(i);
-            if (currentChar == '{' || currentChar == '['){
+            if (inString){
+                if (currentChar == '\n') {
+                    str.deleteCharAt(i);
+                    i--;
+                }
+                else if (currentChar == '"') inString = false;
+                continue;
+            }
+            for (int[] coords : coordMatches){
+                if (i == coords[0]){
+                    i = coords[1];
+                    if (i >= str.length()) overSkipped = true;
+                    else currentChar = str.charAt(i);
+                    break;
+                }
+            }
+            if (overSkipped) break;
+            if (currentChar == '"'){
+                inString = true;
+            }
+            else if (currentChar == '{' || currentChar == '['){
                 stack++;
             }
             else if (currentChar == '\n'){
+                lastNewLine = i;
                 char nextChar = str.charAt(i + 1);
                 // We want to reduce the scope before closing brackets so that the closing
                 // and opening brackets are aligned
                 if (nextChar == ']' || nextChar == '}'){
                     stack--;
                 }
-                for (int j = 0; j < stack; j++){
-                    // Tab length depends on a variable
-                    str.insert(i + 1, new String(new char[TextFieldLine.tabLength]).replace('\0', ' '));
-                    i += lineShift;
-                }
+                i = addTabToList(str, stack, coordMatches, i);
+            }
+            if (currentChar == ' ' && i - lastNewLine > 60){
+                str.insert(++i, "\n");
+                lastNewLine = i;
+                i = addTabToList(str, stack, coordMatches, i);
             }
         }
         return str.toString();
+    }
+
+    private int addTabToList(StringBuilder str, int stack, List<int[]> coordMatches, int i) {
+        for (int j = 0; j < stack; j++){
+            // Tab length depends on a variable
+            str.insert(i + 1, new String(new char[TextFieldLine.tabLength]).replace('\0', ' '));
+            i += lineShift;
+            coordMatches.replaceAll(ints -> new int[]{
+                    ints[0] + lineShift * stack,
+                    ints[0] + lineShift * stack
+            });
+        }
+        return i;
     }
 
     private int getStackValueAtLine(int lineNum){
@@ -430,6 +477,7 @@ public class TextEditor implements Element, Selectable {
 
     private String makeInline(String cmd){
         // Replace any groups of whitespace into one space character
+        // TODO: Leave strings untouched
         StringBuilder formatted = new StringBuilder(cmd.strip()
                 .replaceAll("\\s+", " "));
         int stack = 0;
