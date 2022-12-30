@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Stack;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 record EditorSnapshot(int cursor, int line, String text) {
 }
@@ -45,6 +46,7 @@ public class TextEditor implements Element, Selectable {
     private final Stack<EditorSnapshot> redos;
     private boolean wasThereUndoUpdate;
     private int lastKey;
+    private int charCount;
 
     public TextEditor(TextRenderer textRenderer, int x, int y, int width, int height)
     {
@@ -64,8 +66,9 @@ public class TextEditor implements Element, Selectable {
         this.undos = new Stack<>();
         this.redos = new Stack<>();
         this.wasThereUndoUpdate = false;
-        lastKey = -1;
+        this.lastKey = -1;
         this.fullText = new StringBuilder();
+        this.charCount = 0;
 
         CommandBlockIntellisense.resetInstance("");
     }
@@ -103,7 +106,7 @@ public class TextEditor implements Element, Selectable {
         for (TextFieldLine line : lines){
             boolean lineRet = line.mouseClicked(mouseX, mouseY, button);
             if (lineRet){
-                // The line that actually was clicked will return true, thus we store its index
+                // The line that actually was clicked will return true, thus store its index
                 this.setFocusedLine(i);
             }
             ret = ret || lineRet;
@@ -170,10 +173,10 @@ public class TextEditor implements Element, Selectable {
                 lastKey = 259;
             }
             // This function will only return false if it removed a newline,
-            // otherwise we must let the TextFieldWidget function handle it
+            // otherwise it must let the TextFieldWidget function handle it
             if (this.ProcessBackslash(false)) return true;
         }
-        // Same as backspace but we set the "del" flag as true
+        // Same as backspace but it sets the "del" flag as true
         if (keyCode == 261){ //Delete
             if (lastKey != 259)
             {
@@ -226,7 +229,7 @@ public class TextEditor implements Element, Selectable {
         // Process the class handler
         boolean ret = line.charTyped(chr, modifiers);
         String text = line.getText();
-        // If a character was inserted we must check if the user opened a scope and close it automatically if true
+        // If a character was inserted it must check if the user opened a scope and close it automatically if true
         if (initLength < text.length()){
             int cursor = line.getCursor();
             if (text.charAt(cursor - 1) == '[') {
@@ -263,7 +266,7 @@ public class TextEditor implements Element, Selectable {
 
     public void render(MatrixStack matrices, int mouseX, int mouseY, float delt){
         background.render(matrices, mouseX, mouseY, delt);
-        // We only render from the first visible line to the last
+        // Only render from the first visible line to the last.
         // *lineshift* acts as a pointer to the first visible line
         // *maxLines* contains the number of lines that fit in the background box
         for (int i = this.lineShift; i < this.lines.size() && i < this.maxLines + this.lineShift; i++){
@@ -293,8 +296,8 @@ public class TextEditor implements Element, Selectable {
         }
         // Divide the string into a list of lines
         List<String> cmdLines = new ArrayList<>(List.of(text.split("\n", -1)));
-        // Remove a possible trailing empty line. We only want to remove the last one!
-        // We do not want to do this if there is only one line
+        // Remove a possible trailing empty line, but only the last one!
+        // Fo not do this if there is only one line
         if (Objects.equals(cmdLines.get(cmdLines.size() - 1), "") && cmdLines.size() > 1){
             cmdLines.remove(cmdLines.size() - 1);
         }
@@ -312,7 +315,7 @@ public class TextEditor implements Element, Selectable {
         for (TextFieldLine line : lines){
             command.append(line.getText()).append("\n");
         }
-        // inLine flag denotes if we want to transform it into a compacted 1 liner command
+        // inLine flag denotes if it has to transform it into a compacted 1 liner command
         // since minecraft only understands inline commands
         if (!inline) return command.toString();
         return this.makeInline(command.toString());
@@ -327,15 +330,18 @@ public class TextEditor implements Element, Selectable {
     }
 
     public String autoFormat(String text){
-        // We start with the inline version of the command
+        // Start with the inline version of the command
         StringBuilder str = new StringBuilder(this.makeInline(text));
         int stack = 0;
+        // Remove the strings from the command and store it separately
+        List<String> cmdCommentParsed = this.separateStringsFromCommand(str.toString());
+
         // Add intros in between scopes and after commas
         // Brackets between quotes must be treated specially, and so are scopes before commas
         // Remove possible repeated newlines
         // Add spaces between an equal operator
         // Finally, strip starting and ending whitespace
-        str = new StringBuilder(str.toString()
+        str = new StringBuilder(cmdCommentParsed.get(0)
                 .replaceAll("}", "\n}\n")
                 .replaceAll("]", "\n]\n")
                 .replaceAll("\\{", "\n{\n")
@@ -356,7 +362,11 @@ public class TextEditor implements Element, Selectable {
                 .replaceAll("=", " = ")
                 .strip());
 
-        Matcher coordMatchFinder = CommandBlockIntellisense.coordPatt.matcher(str);
+        // Pop the full command from the comments
+        cmdCommentParsed.remove(0);
+
+        // Find the elements that have coordinates so the system doesn't put intros in the middle
+        Matcher coordMatchFinder = Pattern.compile(RegularExpressions.coords).matcher(str);
         List<int[]> coordMatches = new ArrayList<>();
 
         while (coordMatchFinder.find()){
@@ -377,15 +387,18 @@ public class TextEditor implements Element, Selectable {
                 else if (currentChar == '"') inString = false;
                 continue;
             }
+            // If it happens to stumble upon a coordinate, simply move past it
             for (int[] coords : coordMatches){
                 if (i == coords[0]){
                     i = coords[1];
+                    // There is a chance the coordinates where the last thing in the string
                     if (i >= str.length()) overSkipped = true;
                     else currentChar = str.charAt(i);
                     break;
                 }
             }
             if (overSkipped) break;
+
             if (currentChar == '"'){
                 inString = true;
             }
@@ -395,7 +408,7 @@ public class TextEditor implements Element, Selectable {
             else if (currentChar == '\n'){
                 lastNewLine = i;
                 char nextChar = str.charAt(i + 1);
-                // We want to reduce the scope before closing brackets so that the closing
+                // Reduce the scope before closing brackets so that the closing
                 // and opening brackets are aligned
                 if (nextChar == ']' || nextChar == '}'){
                     stack--;
@@ -408,6 +421,12 @@ public class TextEditor implements Element, Selectable {
                 i = addTabToList(str, stack, coordMatches, i);
             }
         }
+
+        // Restore the comments into the commant, respecting escaped characters
+        for (String comment : cmdCommentParsed){
+            str = new StringBuilder(str.toString().replaceFirst("\"\"", comment.replaceAll("\\\\", "\\\\\\\\")));
+        }
+
         return str.toString();
     }
 
@@ -460,8 +479,6 @@ public class TextEditor implements Element, Selectable {
         newLine.setDrawsBackground(false);
         newLine.setText(text, this.lineShift);
         lines.add(pos, newLine);
-        // If we are going to add a lot of lines in one go, it doesn't make sense to update with every line
-        // Thus, we can set the flag to skip the lineUpdate
     }
 
     public void addTab() {
@@ -476,12 +493,14 @@ public class TextEditor implements Element, Selectable {
     }
 
     private String makeInline(String cmd){
+        // Remove linebreaks since the string detector cannot deal with these
+        // The string detector will remove the string content so the formatter doesn't modify them
+        List<String> cmdParts = this.separateStringsFromCommand(cmd.replaceAll("\n", " "));
         // Replace any groups of whitespace into one space character
-        // TODO: Leave strings untouched
-        StringBuilder formatted = new StringBuilder(cmd.strip()
-                .replaceAll("\\s+", " "));
+        StringBuilder formatted = new StringBuilder(cmdParts.get(0).strip().replaceAll("\\s+", " "));
+        cmdParts.remove(0);
         int stack = 0;
-        // Iterate through every character of the string. We do not iterate the first nor last chars
+        // Iterate through every character of the string. Do not iterate the first nor last chars
         for (int i = 1; i < formatted.length() - 1; i++){
             char curr = formatted.charAt(i);
             // Stack handling
@@ -492,17 +511,44 @@ public class TextEditor implements Element, Selectable {
             char next = formatted.charAt(i + 1);
 
             String specialChars = "{}[]=,";
+            String letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
             // Remove spaces around scope symbols, commas or equal signs
             if (curr == ' ' && (specialChars.indexOf(prev) != -1 || specialChars.indexOf(next) != -1)){
-                // If we are at the outermost part of the command (arguments are separated by spaces here)
-                // we want to make sure brackets are stuck to the previous argument, otherwise minecraft will not like it
-                // THIS IS ONLY FOR NUMBERS. Minecraft formatting is very picky :(
-                if (stack == 0 && next != '[') continue;
+                // If it's at the outermost part of the command (arguments are separated by spaces here)
+                // brackets must be stuck to the previous argument, otherwise minecraft will not like it
+                // THIS MUST NOT HAPPEN FOR NUMBERS. Minecraft formatting is very picky :(
+                if (stack == 0 && (letters.indexOf(prev) == -1 || (next != '[' && next != '{'))) continue;
                 formatted.deleteCharAt(i);
                 i--;
             }
         }
+
+        // Restore all strings into the command, escaping properly the backslashes
+        for (String comment : cmdParts){
+            formatted = new StringBuilder(formatted.toString().replaceFirst("\"\"", comment.replaceAll("\\\\", "\\\\\\\\")));
+        }
+
         return formatted.toString();
+    }
+
+    private List<String> separateStringsFromCommand(String command){
+        List<String> strings = new ArrayList<>();
+        // Fetch all string patterns
+        Matcher strMatcher = Pattern.compile(RegularExpressions.strings).matcher(command);
+        StringBuilder cmdBuilder = new StringBuilder(command);
+        int deleteOffset = 0;
+        // Iterate over all matches
+        while (strMatcher.find()){
+            // Remove the content of all strings and store it separately
+            cmdBuilder.delete(strMatcher.start() + 1 - deleteOffset, strMatcher.end() - 1 - deleteOffset);
+            strings.add(strMatcher.group(0));
+            // Since it's deleting, all future matches will not be where they should be, shift them.
+            // substract 2 because it must not include opening and closing quotes in the deletion
+            deleteOffset += strMatcher.group(0).length() - 2;
+        }
+        // Add the resulting command at the beginning of the list
+        strings.add(0, cmdBuilder.toString());
+        return strings;
     }
 
     //*************************************************************
@@ -536,31 +582,39 @@ public class TextEditor implements Element, Selectable {
     private void updateLines(boolean textChanged){
         int i = 0;
         int cursor = -1;
-        // If there is a cursor we want to keep it, since updating text causes the lines to lose it
+        // If there is a cursor it must keep it, since updating text causes the lines to lose it
         if (focusedLine >= 0 && focusedLine <= this.lines.size() - 1)
             cursor  = this.lines.get(focusedLine).getCursor();
-        // We update how much we have to shift horizontally so everything stays aligned
+        // Update how much shift has to be done horizontally so everything stays aligned
         this.calculateCursorShift();
         for (TextFieldLine line : lines){
             // Position in the visible box
             int pos = i - this.lineShift;
-            // We update the new position in the box
+            // Update the new position in the box
             line.setY(y + 5 + pos * lineHeight);
             // For the line counter at the left
             line.setLineNum(i + 1);
             // So the line knows how bigh the line counter has to be
             line.setMaxLines(lines.size());
-            // We also update the horizontal shift so all lines are aligned
+            // Update the horizontal shift so all lines are aligned
             line.setFirstCharacterIndex(cursorShift);
-            // We update the line counter prefix
+            // Update the line counter prefix
             line.updatePrefix();
             i++;
         }
         // If there was a cursor, restore it
         if (cursor != -1) this.jumpTo(cursor);
-        if (textChanged) this.updateFullText();
+        if (textChanged) {
+            this.updateFullText();
+            this.updateCharCounter();
+        }
         CommandBlockIntellisense.getInstance().refresh(textChanged, fullText.toString(), focusedLine, cursor);
     }
+
+    private void updateCharCounter(){
+        charCount = this.makeInline(this.fullText.toString()).length();
+    }
+
     private void calculateCursorShift(){
         if (focusedLine < 0 || focusedLine > this.lines.size() - 1) return;
         this.cursorShift = lines.get(focusedLine).getFirstCharacterIndex();
@@ -579,7 +633,7 @@ public class TextEditor implements Element, Selectable {
         if (focusedLine != line)
             this.setFocusedLine(line);
         if (focusedLine == -1) return;
-        // We can make the cursor wrap around so -1 means the end of the string, -2 is one more to the left, and so on
+        // Make the cursor wrap around so -1 means the end of the string, -2 is one more to the left, and so on
         if (cursor < 0)
             cursor = lines.get(focusedLine).getText().length() - (-cursor - 1);
         this.lines.get(focusedLine).setCursor(cursor);
@@ -594,7 +648,7 @@ public class TextEditor implements Element, Selectable {
     }
 
     private void saveUndoSnapshot(EditorSnapshot snap, boolean fromRedo) {
-        // If the undo stack is full, we remove the oldest one
+        // If the undo stack is full, remove the oldest one
         if (this.undos.size() == maxUndos) this.undos.remove(0);
         this.undos.push(snap);
         this.wasThereUndoUpdate = true;
@@ -604,10 +658,10 @@ public class TextEditor implements Element, Selectable {
     }
 
     private EditorSnapshot createSnapshot(){
-        // We make sure the fulltext is up to date
+        // Make sure the fulltext is up to date
         this.updateFullText();
         boolean isThereFocus = !(focusedLine < 0 || focusedLine > this.lines.size() - 1);
-        // We create a snapshot with current parameters and save it
+        // Create a snapshot with current parameters and save it
         return new EditorSnapshot(isThereFocus ? this.lines.get(focusedLine).getCursor() : 0, focusedLine, this.fullText.toString());
     }
     private void saveUndoSnapshot(boolean fromRedo) {
@@ -621,18 +675,18 @@ public class TextEditor implements Element, Selectable {
     }
 
     private void saveRedoSnapshot(EditorSnapshot snap){
-        // If the redo stack is full, we remove the oldest one
+        // If the redo stack is full, remove the oldest one
         if (this.redos.size() == maxUndos) this.redos.remove(0);
         this.redos.push(snap);
     }
 
     private void popUndo(){
-        // If empty, we can't pop
+        // If empty, it can't pop
         if (this.undos.empty()) return;
         EditorSnapshot snap = this.undos.pop();
         // Every undo transforms into a redo
         this.saveRedoSnapshot();
-        // We paste the snapshot code and update focused line
+        // Paste the snapshot code and update focused line
         this.updateCommand(snap.text(), false);
         this.jumpTo(snap.line(), snap.cursor());
         this.wasThereUndoUpdate = true;
@@ -642,11 +696,11 @@ public class TextEditor implements Element, Selectable {
     }
 
     private void popRedo(){
-        // If empty, we can't pop
+        // If empty, it can't pop
         if (this.redos.empty()) return;
         this.saveUndoSnapshot(true);
         EditorSnapshot snap = this.redos.pop();
-        // We paste the snapshot code and update focused line
+        // Paste the snapshot code and update focused line
         this.updateCommand(snap.text(), false);
         this.jumpTo(snap.line(), snap.cursor());
         // After a pop, any valid key should trigger an undo
@@ -668,13 +722,13 @@ public class TextEditor implements Element, Selectable {
         int cursor = line.getCursor();
         // Get the text from the cursor till the end of the line
         String text = line.getText().substring(cursor);
-        // We set the line text to be the part we didn't get
+        // Set the line text to be the part it didn't get
         line.setText(line.getText().substring(0, cursor), cursorShift);
-        // Create new line below the original one with the text we extracted earlier
-        // We strip leading spaces because we are going to manually set the tabs later
+        // Create new line below the original one with the text it extracted earlier
+        // Strip leading spaces because it's going to manually set the tabs later
         this.addLine(text.stripLeading(), focusedLine + 1);
         this.jumpTo(focusedLine + 1, 0);
-        // We get how many tabs we have to put in the new line
+        // Get how many tabs it has to put in the new line
         int stack = getStackValueAtLine(focusedLine);
         for (int i = 0; i < stack; i++){
             this.addTab();
@@ -703,7 +757,7 @@ public class TextEditor implements Element, Selectable {
         int cursor = line.getCursor();
         // If at the moment of pressing intro, there are opening and closing scope symbols
         // to the left and right of the cursor respectively, that means the player is adding a newline
-        // to an empty scope. In that case we want to put the scope symbols in their own lines with
+        // to an empty scope. In that case it must put the scope symbols in their own lines with
         // an empty one in the middle
         if (cursor > 0 && cursor < line.getText().length()){
             char prev = line.getText().charAt(cursor - 1);
@@ -737,7 +791,7 @@ public class TextEditor implements Element, Selectable {
         if (cursor > 0) {
             return false;
         }
-        // We cannot delete the first line
+        // It must not delete the first line
         if (focusedLine == 0){
             return true;
         }
@@ -772,7 +826,7 @@ public class TextEditor implements Element, Selectable {
 
     private boolean processHorizontalArrows(Directions dir){
         int cursor = this.lines.get(focusedLine).getCursor();
-        // If we are not managing a change of line, we leave the handling to TextFieldWidget
+        // If it's not managing a change of line, leave the handling to TextFieldWidget
         if (dir == Directions.LEFT &&
                 (cursor != 0 || focusedLine == 0) ||
             dir == Directions.RIGHT &&
@@ -782,5 +836,13 @@ public class TextEditor implements Element, Selectable {
         else if (dir == Directions.RIGHT) this.jumpTo(focusedLine + 1, 0);
         this.updateLines(false);
         return true;
+    }
+
+    //***********************************************************
+    //************************* GETTERS *************************
+    //***********************************************************
+
+    public int getCommandLength(){
+        return this.charCount;
     }
 }

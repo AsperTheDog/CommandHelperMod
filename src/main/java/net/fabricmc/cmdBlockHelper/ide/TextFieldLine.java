@@ -49,7 +49,7 @@ public class TextFieldLine extends TextFieldWidget {
     }
 
     public void updatePrefix(){
-        // We get the line num and pad spaces till we have enough
+        // Get the line num and pad spaces till it gets to the desired length
         prefix = lineNum + " ".repeat(Math.max(0, Integer.toString(maxLines).length() - Integer.toString(lineNum).length())) + " -";
         lineCounter.setText(prefix);
         // Update the width of the prefix, then shrink and move the main line so everything fits together
@@ -57,7 +57,7 @@ public class TextFieldLine extends TextFieldWidget {
         lineCounter.setWidth(prefixWidth);
         super.setWidth(this.initW - prefixWidth - 3);
         super.setX(this.initX + prefixWidth + 3);
-        // the text will truncate sometimes if we don't reset the cursor
+        // the text will truncate sometimes if it doesn't reset the cursor
         lineCounter.setCursorToStart();
     }
 

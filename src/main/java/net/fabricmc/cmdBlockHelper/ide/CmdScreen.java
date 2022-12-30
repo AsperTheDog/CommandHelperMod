@@ -20,6 +20,8 @@ import java.util.Objects;
 public class CmdScreen extends Screen {
     public static TextRenderer monoRenderer = null;
 
+    public static final int maxCmdLength = 32500;
+
     protected final AbstractCommandBlockScreen parent;
     protected String text;
     protected String unformattedText;
@@ -45,7 +47,7 @@ public class CmdScreen extends Screen {
         ).dimensions(this.width - 80, this.height - 30, 70, 20).build());
 
         // Editor box creation
-        this.editor = new TextEditor(monoRenderer, 10, 10, this.width - 100, this.height - 20);
+        this.editor = new TextEditor(monoRenderer, 10, 20, this.width - 100, this.height - 30);
         // Extract the current command in the command block GUI
         this.text = ((AbstractCommandBlockScreenAccessor)this.parent).getConsoleCommandTextField().getText();
         // TODO: Properly store the unformatted command as an NBT tag or something similar. Classes are recreated every time
@@ -73,7 +75,7 @@ public class CmdScreen extends Screen {
         if(this.parent instanceof CommandBlockScreen){
             ((CommandBlockScreenAccessor)this.parent).invokeSetButtonsActive(true);
         }
-        // We restore the initial text that was in the command block text field
+        // Restore the initial text that was in the command block text field
         ((AbstractCommandBlockScreenAccessor)this.parent).getConsoleCommandTextField().setText(text);
     }
 
@@ -86,7 +88,7 @@ public class CmdScreen extends Screen {
         if(this.parent instanceof CommandBlockScreen){
             ((CommandBlockScreenAccessor)this.parent).invokeSetButtonsActive(true);
         }
-        // We push the inline version of the command created in the Editor box
+        // Push the inline version of the command created in the Editor box
         ((AbstractCommandBlockScreenAccessor)this.parent).getConsoleCommandTextField().setText(editor.getCommand(true));
     }
 
@@ -122,5 +124,11 @@ public class CmdScreen extends Screen {
         this.renderBackground(matrices);
         super.render(matrices, mouseX, mouseY, delta);
         this.editor.render(matrices, mouseX, mouseY, delta);
+        // Generate the text for the character count, if it avobe the maximum length, then set it red and disable the done button
+        boolean doesOverflow = this.editor.getCommandLength() > maxCmdLength;
+        String charCountMsg = "Command length: " + this.editor.getCommandLength() + " (Characters left: " + (maxCmdLength - this.editor.getCommandLength()) + ")";
+        // 10485760 = red, 10526880 = light gray
+        drawTextWithShadow(matrices, this.textRenderer, Text.literal(charCountMsg), 10, 10, doesOverflow ? 10485760 : 10526880);
+        this.doneButton.active = !doesOverflow;
     }
 }

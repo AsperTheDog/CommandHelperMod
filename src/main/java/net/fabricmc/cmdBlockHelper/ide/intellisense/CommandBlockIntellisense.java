@@ -1,6 +1,7 @@
 package net.fabricmc.cmdBlockHelper.ide.intellisense;
 
 import com.mojang.brigadier.ParseResults;
+import net.fabricmc.cmdBlockHelper.ide.RegularExpressions;
 import net.minecraft.command.CommandSource;
 import net.minecraft.text.OrderedText;
 
@@ -19,9 +20,6 @@ record StackElement(ScopeType type, CommandParserNode relatedNode) {
 }
 
 public class CommandBlockIntellisense {
-    public static Pattern coordPatt = Pattern.compile(
-            "(~-?[0-9.]+|\\^-?[0-9]+(\\.[0-9]+)?|~|\\^|-?[0-9]+(\\.[0-9]+)?) (~-?[0-9.]+|\\^-?[0-9]+(\\.[0-9]+)?|~|\\^|-?[0-9]+(\\.[0-9]+)?) (~-?[0-9.]+|\\^-?[0-9]+(\\.[0-9]+)?|~|\\^|-?[0-9]+(\\.[0-9]+)?)"
-    );
     private static CommandBlockIntellisense instance;
     String rawText;
     List<List<CommandParserNode>> symbols;
@@ -52,17 +50,17 @@ public class CommandBlockIntellisense {
     }
 
     public void refresh(boolean textChanged, String text, int cursorLine, int cursorPos){
-        // If the refresh includes a change in text, we recreate the symbols
+        // If the refresh includes a change in text, recreate the symbols
         if (textChanged){
             this.rawText = text;
             this.parseSymbols();
         }
-        // In all cases we update the cursor
+        // In all cases update the cursor
         this.setCursorPos(cursorLine, cursorPos);
     }
 
     private void parseSymbols() {
-        // We reset all variables
+        // Reset all variables
         this.symbols.clear();
         this.scopeStack.clear();
         boolean inString = false;
@@ -70,9 +68,10 @@ public class CommandBlockIntellisense {
         currentLine = 0;
         lineStart = start;
         // String of chars that will create single char symbols
-        String breakingChars = ",:=.";
+        String breakingChars = ",:=./";
 
-        Matcher coordMatchFinder = coordPatt.matcher(rawText);
+
+        Matcher coordMatchFinder = Pattern.compile(RegularExpressions.coords).matcher(rawText);
         List<int[]> coordMatches = new ArrayList<>();
 
         while (coordMatchFinder.find()){
@@ -89,6 +88,13 @@ public class CommandBlockIntellisense {
                 }
             }
             char chr = rawText.charAt(i);
+            // Escaped characters must be ignored, but if it's the last character, close up the symbol
+            if (i > 0 && rawText.charAt(i - 1) == '\\') {
+                if (i == rawText.length() - 1) {
+                    this.addSymbol(start, i, currentLine);
+                }
+                continue;
+            }
             // Every newline will create a symbol so that symbols are enclosed to their lines only
             if (chr == '\n'){
                 // Strings can happen between multiple lines, we want the symbols to be aware of that
@@ -98,19 +104,19 @@ public class CommandBlockIntellisense {
                 lineStart = start;
                 currentLine++;
             }
-            // If we are inside of a string we want to ignore everything but double quotes
+            // If it's inside of a string, ignore everything but double quotes
             else if (inString){
                 if (chr == '"'){
                     start = this.addSymbol(start, i + 1, currentLine);
                     inString = false;
                 }
             }
-            // If we are not inside a string a double quote will start one
+            // If it's not inside a string, a double quote will start one
             else if (chr =='"'){
                 start = this.addSymbol(start, i, currentLine);
                 inString = true;
             }
-            // If we are in the outermost scope every space means a new argument
+            // If it's in the outermost scope, every space means a new argument
             else if (this.scopeStack.empty() && chr == ' '){
                 start = this.addSymbol(start, i, currentLine);
             }
@@ -132,7 +138,7 @@ public class CommandBlockIntellisense {
                 this.popElemFromStack(chr);
             }
         }
-        // When we finish we create the symbol arguments
+        // When finish, create the symbol arguments
         this.generateArgs();
     }
 
@@ -154,11 +160,11 @@ public class CommandBlockIntellisense {
     private int addSymbol(int start, int end, int line, boolean sentByIntro){
         // We don't want to add empty symbols
         if (start == end) return end;
-        // We prune the symbol content from the command
+        // Prune the symbol content from the command
         String symbolText = rawText.substring(start, end);
-        // We expand the list of lines until we get the line we're in
+        // Expand the list of lines until it gets the line it's in
         while (line >= this.symbols.size()) symbols.add(new ArrayList<>());
-        // We can delegate empty symbols to form part of the next, that way if you have "   " and "example" the
+        // Delegate empty symbols to form part of the next, that way if you have "   " and "example" the
         // resulting symbol will be "   example". This must not happen if the symbol is issued by a newline, since
         // you can't have one symbol distributed in two different lines
         if (symbolText.strip().equals("") && !sentByIntro)
@@ -171,33 +177,33 @@ public class CommandBlockIntellisense {
     private void addElemToStack(char chr){
        // Should never happen, but just in case
        if (chr != '[' && chr != '{') return;
-       // We get the type of scope, this is important to detect errors in the command syntax
+       // Get the type of scope, this is important to detect errors in the command syntax
        ScopeType type = chr == '[' ? ScopeType.BRACKET : ScopeType.BRACE;
-       // We add the element to the stack
+       // Add the element to the stack
        this.scopeStack.push(new StackElement(type, this.getSymbol(this.symbols.get(currentLine).size() - 1)));
     }
 
     private void popElemFromStack(char chr){
         // Should never happen, but just in case
         if (chr != ']' && chr != '}') return;
-        // We get the type of scope, this is important to detect errors in the command syntax
+        // Get the type of scope, this is important to detect errors in the command syntax
         ScopeType type = chr == ']' ? ScopeType.BRACKET : ScopeType.BRACE;
-        // We get the last symbol of the stack
+        // Get the last symbol of the stack
         CommandParserNode symbol = this.getSymbol(this.symbols.get(currentLine).size() - 1);
-        // If the stack is empty, it means there was a syntax error, so we set the scope symbol as error
+        // If the stack is empty it means there was a syntax error, so it sets the scope symbol as error
         if (scopeStack.empty()){
             symbol.setError(true);
             return;
         }
         StackElement elem = scopeStack.pop();
-        // If types do not match, there was a syntax error in the command, we set the symbols as error
+        // If types do not match there was a syntax error in the command, so it sets the symbols as error
         if (elem.type() != type){
             scopeStack.push(elem);
             elem.relatedNode().setError(true);
             symbol.setError(true);
             return;
         }
-        // If everything went alright, we set the nodes as sibling scopes
+        // If everything went alright, set the nodes as sibling scopes
         elem.relatedNode().setSibling(symbol);
         symbol.setSibling(elem.relatedNode());
     }
@@ -229,7 +235,7 @@ public class CommandBlockIntellisense {
         if (line < 0 || line >= this.symbols.size()) return null;
         // Negative indexes will lookup the previous lines
         while (index < 0){
-            // We only look up a previous line if it exists
+            // Only look up a previous line if it exists
             if (line > 1){
                 line--;
                 index = this.symbols.get(line).size() + index;

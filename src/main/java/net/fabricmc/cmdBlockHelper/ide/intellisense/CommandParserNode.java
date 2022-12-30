@@ -8,21 +8,28 @@ import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
 enum SymbolTypes {
-    NORMAL,
-    STRING,
-    EQUAL,
-    LEFT_EQUAL,
-    RIGHT_EQUAL,
-    SEMICOLON,
-    LEFT_SEMICOLON,
-    RIGHT_SEMICOLON,
-    COMMA,
-    SCOPE,
-    LIST,
-    QUOTE,
-    NUMBER,
-    DOT,
-    COORDS
+    // Each symbol type has an associated color for the formatter
+    NORMAL(Style.EMPTY.withColor(Formatting.WHITE)),
+    STRING(Style.EMPTY.withColor(Formatting.GREEN)),
+    EQUAL(Style.EMPTY.withColor(Formatting.YELLOW)),
+    LEFT_EQUAL(Style.EMPTY.withColor(Formatting.GOLD)),
+    RIGHT_EQUAL(Style.EMPTY.withColor(Formatting.LIGHT_PURPLE)),
+    SEMICOLON(Style.EMPTY.withColor(Formatting.YELLOW)),
+    LEFT_SEMICOLON(Style.EMPTY.withColor(Formatting.GOLD)),
+    RIGHT_SEMICOLON(Style.EMPTY.withColor(Formatting.LIGHT_PURPLE)),
+    COMMA(Style.EMPTY.withColor(Formatting.GRAY)),
+    SCOPE(Style.EMPTY.withColor(Formatting.BLUE)),
+    LIST(Style.EMPTY.withColor(Formatting.DARK_AQUA)),
+    QUOTE(Style.EMPTY.withColor(Formatting.GREEN)),
+    NUMBER(Style.EMPTY.withColor(Formatting.AQUA)),
+    DOT(Style.EMPTY.withColor(Formatting.YELLOW)),
+    SLASH(Style.EMPTY.withColor(Formatting.DARK_GRAY)),
+    COORDS(Style.EMPTY.withColor(Formatting.DARK_PURPLE));
+
+    public final Style style;
+    SymbolTypes(Style style){
+        this.style = style;
+    }
 }
 
 public class CommandParserNode {
@@ -59,11 +66,11 @@ public class CommandParserNode {
         // This pass will assign the appropriate argument types to the symbols so the system knows what color to apply
         // to them. This is the first pass, so only independent arguments will be applied (that is, arguments that are not
         // relative to other arguments
-        if (this.isCoords){
-            this.symbolType = SymbolTypes.COORDS;
-        }
-        else if (this.symbol.contains("\"") || this.isString) {
+        if (this.symbol.contains("\"") || this.isString) {
             this.symbolType = SymbolTypes.STRING;
+        }
+        else if (this.isCoords){
+            this.symbolType = SymbolTypes.COORDS;
         }
         else if (this.symbol.contains("=")) {
             this.symbolType = SymbolTypes.EQUAL;
@@ -85,6 +92,9 @@ public class CommandParserNode {
         }
         else if(this.symbol.contains(".")){
             this.symbolType = SymbolTypes.DOT;
+        }
+        else if (this.symbol.contains("/")){
+            this.symbolType = SymbolTypes.SLASH;
         }
         else{
             // If the symbol is a numeric pattern
@@ -116,7 +126,7 @@ public class CommandParserNode {
             }
         }
 
-        // We do the same for the elements to the right of an equal sign or a semicolon
+        // Do the same for the elements to the right of an equal sign or a semicolon
         CommandParserNode prev = this.parent.getSymbol(symbolsIndex - 1, line);
         i = 2;
         while(prev != null && prev.symbol.strip().equals("")) {
@@ -129,7 +139,7 @@ public class CommandParserNode {
                 return;
             }
             if (prev.getSymbolType() == SymbolTypes.SEMICOLON) {
-                this.symbolType = SymbolTypes.RIGHT_EQUAL;
+                this.symbolType = SymbolTypes.RIGHT_SEMICOLON;
                 return;
             }
         }
@@ -153,31 +163,17 @@ public class CommandParserNode {
         int symbolStart = positionInLine;
         int symbolEnd = positionInLine + this.symbol.length();
 
-        // If the beginning of the symbol is after the last needed char of the string, we skip
-        // If the last character of the symbol is before the first needed char of the string, we also skip
+        // If the beginning of the symbol is after the last needed char of the string, skip
+        // If the last character of the symbol is before the first needed char of the string, also skip
         if (symbolEnd <= firstChar || lastChar <= symbolStart) return null;
-        // Otherwise we get the appropriate part of the symbol to print
+        // Otherwise get the appropriate part of the symbol to print
         int minChar = Math.max(symbolStart, firstChar) - symbolStart;
         int maxChar = Math.min(symbolEnd, lastChar) - symbolStart;
         String text = this.symbol.substring(minChar, maxChar);
-        // We apply the correct color depending on what argument type is attached to the symbol
-        Style style = Style.EMPTY;
-        switch (this.symbolType) {
-            case STRING, QUOTE -> style = style.withColor(Formatting.GREEN);
-            case EQUAL, SEMICOLON -> style = style.withColor(Formatting.YELLOW);
-            case LEFT_EQUAL, LEFT_SEMICOLON -> style = style.withColor(Formatting.GOLD);
-            case RIGHT_EQUAL, RIGHT_SEMICOLON -> style = style.withColor(Formatting.LIGHT_PURPLE);
-            case COMMA ->  style = style.withColor(Formatting.GRAY);
-            case SCOPE ->  style = style.withColor(Formatting.BLUE);
-            case LIST ->  style = style.withColor(Formatting.AQUA);
-            case NORMAL ->  style = style.withColor(Formatting.WHITE);
-            case DOT -> style = style.withColor(Formatting.GOLD);
-            case NUMBER -> style = style.withColor(Formatting.AQUA);
-            case COORDS -> style = style.withColor(Formatting.LIGHT_PURPLE);
-        }
-        // If the error flag is activated, override the color to red
-        if (this.hasError) style = style.withColor(Formatting.RED);
-        // If it's a scope and the mouse is on it or on the related scope symbol, we add italics
+        // Apply the correct color depending on what argument type is attached to the symbol
+        // or, if the error flag is activated, set the color to red
+        Style style = this.hasError ? Style.EMPTY.withColor(Formatting.RED) : this.symbolType.style;
+        // If it's a scope and the mouse is on it or on the related scope symbol, add italics
         if (shouldBoldScope(cursorPos, line) ||
                 (this.sibling != null && this.sibling.shouldBoldScope(cursorPos, line)))
             style = style.withItalic(true);

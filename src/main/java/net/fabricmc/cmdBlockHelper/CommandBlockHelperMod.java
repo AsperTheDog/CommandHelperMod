@@ -13,7 +13,7 @@ public class CommandBlockHelperMod implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		LOGGER.info("Command Block Helper mod initialized");
-		// After the client has initiated, we want to create the TextRenderer with the monospace font
+		// After the client has initiated, create the TextRenderer with the monospace font
 		ClientLifecycleEvents.CLIENT_STARTED.register((client) ->
 				CmdScreen.monoRenderer = MonoTextRenderer.generateTextRenderer());
 	}
